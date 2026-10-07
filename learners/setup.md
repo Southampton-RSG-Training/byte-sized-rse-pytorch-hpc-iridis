@@ -2,19 +2,14 @@
 title: Setup
 ---
 
-FIXME: Setup instructions live in this document. Please specify the tools and
-the data sets the Learner needs to have installed.
-
-## Data Sets
-
-<!--
-FIXME: place any data you want learners to use in `episodes/data` and then use
-       a relative link ( [data zip file](data/lesson-data.zip) ) to provide a
-       link to it, replacing the example.com link.
--->
-Download the [data zip file](https://example.com/FIXME) and unzip it to your Desktop
 
 ## Software Setup
+
+### Iridis Account
+
+To follow along with the activity, you will need to have an Iridis account. If you do not have one, you can request access (... details ...).
+
+
 
 ::::::::::::::::::::::::::::::::::::::: discussion
 

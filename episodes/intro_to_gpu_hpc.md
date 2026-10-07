@@ -81,13 +81,11 @@ PyTorch has a number of different APIs for distributing computation across multi
 - **Tensor Parallel (TP)** allow scaling beyond what FSDP2 is capable of.
 - there are several other APIs, such as DeviceMesh, Monarch and TorchTitan.
 
-These APIs are complex, and it is easy to miss subtle requirements for synchronisation, and not easy to convert from one API to another. Code written for DDP, for example, will need re-work to run using FSDP2. That makes the development process going from simple working single GPU code to fully distributed code fragile.
+These APIs are complex, and it is easy to miss subtle requirements for synchronisation, and not easy to convert from one API to another. Code written for DDP, for example, will need re-work to run using FSDP2. That makes the development process going from simple working CPU or single-GPU code to fully distributed code fragile.
 
-HuggingFace has a library, Accelerate, which simplifies the process of switching between the different APIs, by providing a unified API that can be configured to work with whatever hardware you are running on.
+HuggingFace has a library, Accelerate, which simplifies the process of switching between the different APIs, by providing a unified API that can be configured to work with whatever hardware you are running on. The approach that Accelerate takes, is to wrap non-distributed PyTorch API objects, which then ensures that data and models get spread around the declared resources appropriately. For research software, as opposed to commercial production pipelines, Accelerate provides a practical solution to most of the difficulties of distributing GPU computation.
 
-The approach that Accelerate takes, is to wrap non-distributed PyTorch API objects using Accelerate, which then ensures that data and models get spread around the declared resources appropriately.
-
-For research software, as opposed to commercial production pipelines, Accelerate provides a practical solution to most of the difficulties of distributing GPU computation.
+Hugging-face
 
 ## Checkpoints
 
@@ -109,7 +107,42 @@ Iridis X consists machines with a total of 46 Nvidia A100 80GB graphics cards, a
 
 Iridis 7, which is very new, adds another 120 H200 graphics cards.
 
-They share disk storage with Iridis 6, but have different login nodes (which are currently shared by Iridis X and 7).
+They share disk storage with Iridis 6, but have different login nodes (which are currently shared by Iridis X and 7). They also shared the login accounts: You don't need separate accounts for each of them.
+
+Two of the Iridis X login nodes have a GPU available which can be used for quick validation of code before submitting something more substantial.
+
+### SLURM Configuration for Using GPUs
+
+When using a GPU cluster for your work, you need to specify to SLURM the resources you expect to use. In addition to specifying the number of nodes and processes, you also need to specify how many GPUs you need per process. GPU clusters typically have restrictions on how many nodes you can use compared to CPU nodes.
+
+You can do this either by specifying the number of GPUs to use per node:
+
+``` bash
+#SBATCH --gpus=2
+```
+
+or by the number of GPUs per task:
+
+``` bash
+#SBATCH --gpus-per-task=2
+```
+
+Obviously, these values must be within the number available with the hardware, and they must be within the limits of what you can access with your usage rights.
+
+Depending on the technology being used to transfer data between GPUs, you may also need to specify:
+
+``` bash
+#SBATCH --gpu-bind=none
+```
+
+as GPU binding can interfere with native inter-GPU communication.
+
+Also, you want to make CUDA available so you can run your code on the GPUs. You do this by loading the `cuda` module the same way that you load the `python` module:
+
+``` bash
+load module cuda
+```
+
 
 ## References
 
