@@ -5,11 +5,21 @@ title: Setup
 
 ## Software Setup
 
+### Code Editor or IDE
+
+
+### GitHub Account
+
+
+### Python
+
+
+
 ### Iridis Account
 
 To follow along with the activity, you will need to have an Iridis account. If you do not have one, you can request access (... details ...).
 
-
+You may want to set up your GitHub credentials on your Iridis account if you haven't already.
 
 ::::::::::::::::::::::::::::::::::::::: discussion
 

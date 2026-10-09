@@ -568,7 +568,7 @@ def load(model, optimizer, scheduler, path):
 
 These have to save more than just the current state of the model, but all objects involved in the training.
 
-Accelerate allows us to simplify this, because it has already been told what objects are involved in the training. The `save_state` and `load_state` methods handle serializing and deserializing everything in one operation.
+When running across multiple GPUs or nodes, there is complication because only one of the processes should save the state, and if the model is itself distributed then weights need to be gathered from each of the other processes. Accelerate allows us to simplify this. Indeed, because it has already been told what objects are involved in the training the `save_state` and `load_state` methods can handle serializing and deserializing all relevant state in one operation, as well as dealing with any issues from running multiple GPUs or nodes.
 
 So we can replace `torch.save` by `accelerator.save_state`, and `torch.load` with `accelerator.load_state`:
 
@@ -625,7 +625,13 @@ accelerate launch -m simple_cnn train --epochs 2
 
 :::
 
-### Convert Logging to us Accelerate
+### Computing Validation Metrics
+
+When running training code, you often want to get some idea of the progress of the training using validation data and various different metrics, depending on the problem space. Particularly when working with distributed data, this presents a problem of needing to gather results for the metric from multiple different processes and combine them. If you did not do this, you'd get a different value for the metric for each of worker processes relating only to the data that that process knows about.
+
+Accelerate and the associated Evaluate package also can help with this, by collecting the required data for each metric you are interested in on each data node, and then sending it to the main process to compute the actual value.
+
+### Convert Logging to use Accelerate
 
 As written, the code currently uses Python's standard logging system to save logs. Logging best practice in Python is to import `logging` in every module where you wish to do logging, and then call `logging.getLogger(__name__)` to set up the module's logger object:
 
@@ -658,10 +664,12 @@ def train_epoch(
                 "Train Epoch: {} [{}/{} ({:.0%})]\tLoss: {:.6f}".format(
                     epoch,
                     batch_idx * len(data),
-                    len(train_loader.dataset),
+                    len(train_loader),
                     batch_idx / len(train_loader),
                     loss.item(),
-                )
+                    main_process_only=False,
+                ),
+                main_process_only=False,
             )
 ```
 
@@ -678,60 +686,16 @@ import logging
     default="",
 )
 def cli(log_dir_name):
-    if log_dir_name:
-        # ensure logging directory exists
-        log_dir = Path(log_dir_name)
-        log_dir.mkdir(parents=True, exist_ok=True)
-        logging.basicConfig(
-            filename=log_dir / f"log-{os.getpid()}.log",
-            level=logging.INFO,
-        )
-    else:
-        logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
 ```
 
 This either logs to standard output, or to a specified directory (using the process id in the log file name).
 
-::: challenge
+This doesn't work as well when running multiple tasks, and particularly on multiple nodes, as each Python process gets its own standard output and file, so it can be hard to tell what things happen when on different processes and nodes, and there is no guarantee that the log messages will be written in the order that things actually occurred across the different processes.
 
-### Convert the Checkpoint Code to use Accelerate
+Accelerate helps with this by providing an almost drop-in replacement for the `logging` module that sends all logging back to a single node. To use it, you replace `import logging` with `from accelerate import logging` and `getLogger` with `get_logger`. By default, this only logs from the main process, but you can specify an argument that will collect logs from all processes, and another that will ensure that
 
-Clear the checkpoint directory with the command:
-
-``` bash
-rm checkpoint/SimpleCNN*
-```
-
-Change the code to make use of Accelerate for making checkpoints and then run it on your machine.
-
-You can verify that the code works by running the test suite:
-
-``` bash
-python -m unittest discover --s src -v
-```
-
-Add, commit and push the changes to your copy of the github repo.
-
-::: solution
-
-The updated training code should look like:
-
-``` python
-```
-
-And run with:
-
-``` bash
-accelerate launch -m simple_cnn train --epochs 2
-```
-
-:::
-
-:::
-
-This doesn't work as well when running multiple tasks, and particularly on multiple nodes, as each Python process gets its own standard output and file, so it can be hard to tell what things happen when on different processes and nodes.
-
-Accelerate helps with this by providing an almost drop-in replacement for the `logging` module that sends all logging back to a single node. To use it, you replace `import logging` with `from accelerate import logging` and `getLogger` with `get_logger`. Everything else remains unchanged:
+Everything else remains unchanged:
 
 ``` python
 from accelerate import logging
@@ -890,6 +854,8 @@ To quickly test that everything is working on Iridis you can run the tests:
 ``` bash
 
 ```
+
+At this point, with a properly configured SLURM batch file, you should be able to submit in the same way as any other job using `sbatch`.
 
 ## References
 
