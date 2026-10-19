@@ -849,7 +849,7 @@ module load python
 ./install.sh
 ```
 
-To quickly test that everything is working on Iridis you can run the tests:
+To quickly test that everything is working on Iridis you can run the tests on the login node:
 
 ``` bash
 
