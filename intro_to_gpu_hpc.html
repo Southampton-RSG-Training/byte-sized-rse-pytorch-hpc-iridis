@@ -222,7 +222,7 @@
 <li><a href="#programming-with-gpus">Programming with GPUs</a></li>
 <li><a href="#multi-gpu-code">Multi-GPU code</a></li>
 <li><a href="#deep-learning-libraries">Deep Learning Libraries</a></li>
-<li><a href="#multi-gpu-pytorch">Multi-GPU PyTorch</a></li>
+<li><a href="#multi-gpu-torch">Multi-GPU Torch</a></li>
 <li><a href="#checkpoints">Checkpoints</a></li>
 <li><a href="#iridis-x-and-iridis-7">Iridis X and Iridis 7</a></li>
 <li><a href="#references">References</a></li>
@@ -341,8 +341,11 @@
 <div class="card-body">
 <div class="inner bordered">
 <h3 class="card-title">Objectives</h3>
-<ul><li>
-</li></ul></div>
+<ul><li>Understand how to configure SLURM batch files to make use of
+available GPUs on a system.</li>
+<li>Be able to run a deep learning model on multiple GPUs using
+Accelerate and SLURM.</li>
+</ul></div>
 </div>
 </div>
 </div>
@@ -354,10 +357,10 @@ architectures which are optimized differently:</p>
 few things simultaneously—generally just one thing per core—but they
 heavily optimize that work, by doing things like looking ahead in the
 instruction pipeline and pre-computing based on what they suspect the
-most likely code path is. They are fast, but trade off performance for
-generality.</li>
+most likely code path is. They are fast, but trade off worse performance
+for better generality.</li>
 <li>modern GPUs are wide, but shallow: they can work simultaneously on
-large amounts of date, but the operations being performed have to be the
+large amounts of data, but the operations being performed have to be the
 same. They evolved from needing to perform fast linear algebra
 computations on pixels in a buffer for display on a screen, but this
 also turned out to be useful for other linear algebra computations, and
@@ -375,40 +378,45 @@ different inputs.</p>
 networks trained using back-propagation and gradient descent
 algorithms.</p>
 <p>The GPU on a personal computer typically has a handful of cores and a
-few gigabytes of GPU memory. This limits the sorts of computations in a
-number of ways:</p>
+few gigabytes of GPU memory. This limits computations in a number of
+ways:</p>
 <ul><li>only a handful of different computational steps can be performed at
 the same time</li>
 <li>the working data is comparatively small</li>
 <li>when the working data is larger than the available GPU memory, or
 when you switch computational tasks, you often need to spend time moving
 data between GPU and main memory (or worse, to disk or network).</li>
-</ul><p>Just like HPC systems based around CPUs, GPU-base HPC systems
-typically offer more GPU cores (often in the thousands, with specialized
-cores for particular data types), more GPU memory (into the 10s of
-gigabytes), and faster access to that memory. They may also have
-multiple GPUs installed on the same machine.</p>
+</ul><p>Just like HPC systems based around CPUs offer more numerous and
+powerful CPUs than desktop CPUs, GPU-based HPC systems typically offer
+more GPU cores (often in the thousands, with specialized cores for
+particular data types), more GPU memory (into the 10s of gigabytes), and
+faster access to that memory. They may also have multiple GPUs installed
+on the same machine.</p>
+<p>This allows GPU-based HPC to do either more small tasks in parallel
+or, significantly for large language models, handle larger and more
+complex data.</p>
 </section><section><h2 class="section-heading" id="programming-with-gpus">Programming with GPUs<a class="anchor" aria-label="anchor" href="#programming-with-gpus"></a></h2>
-<hr class="half-width"><p>GPUs have different instruction sets than CPUs, and the code that
-they run tends to be small and simple. Rather than loading pre-compiled
-code from disk, as a CPU-based program might do, it’s common for code
-that is using a GPU to compile that code on-the-fly for the particular
+<hr class="half-width"><p>At the level of machine code, GPU instruction sets have a different
+focus from CPU instruction sets, and the code that they run tends to be
+small and simple. Rather than loading pre-compiled code from disk, as a
+CPU-based program might do, it’s common for applications that are using
+a GPU to compile the GPU code on-the-fly, optimising for the particular
 GPU that is going to be used, allowing it to make greatest use of the
 hardware.</p>
-<p>In the early days, this was done via mechanisms like OpenGL’s shader
+<p>In the early days this was done via mechanisms like OpenGL’s shader
 language, then OpenCL’s compute kernels, but more recently more
 hardware-specific technologies have prevailed: CUDA for Nvidia hardware,
 ROCm for AMD hardware, and MPS for Apple Silicon.</p>
 <p>If you know the hardware which your code is going to run on, you can
-work at this level writing code in C or C++, or using wrappers in Python
-or another high-level language.</p>
-<p>However, it’s more common to use more domain-specific code which uses
-different GPU backends as appropriate for the hardware being used, but
-which can also run on the CPU if nothing else is available.</p>
-<p>In particular, libraries like TensorFlow, Torch and JAX provide
-unified tensor APIs for machine learning, handling the automatic
-differentiation needed for back-propagation and gradient-descent based
-algorithms.</p>
+work at this lowest level, writing code in the appropriate shader
+language and calling it from C, C++, or using wrappers from Python or
+another high-level language.</p>
+<p>However, it’s more common to use more domain-specific code which
+abstract away the different GPU hardware technologies, and which can
+also run on the CPU if nothing else is available. In particular,
+libraries like TensorFlow, Torch and JAX provide unified tensor APIs for
+machine learning, handling the automatic differentiation needed for
+back-propagation and gradient-descent based algorithms.</p>
 <p>Libraries like Keras and Transformers then sit on top of those layers
 to provide deep learning and LLM-specific support.</p>
 <p>One complication that filters up to the level of the person writing
@@ -430,34 +438,40 @@ deep learning model.</p></li>
 <li><p><strong>Model Parallel</strong> computations split the model
 across different GPUs and run the data through all of them. For example,
 splitting model layers across GPUs when performing inference using a
-deep learning model. For very large models, a large single layer may
-even need to be spread over multiple GPUs.</p></li>
+deep learning model.</p></li>
 </ul><p>For deep learning models, particularly when training, care has to be
-taken when synchronizing between the different GPUs. For example, when
-training, the code may need to carefully synchronise steps. For example
-the results of a layer computation on a batch in a model parallel
-example may need to wait for the next layer to finish the previous batch
-before data is transferred to the next GPU.</p>
+taken when synchronizing between the different GPUs. For example, if
+data is distributed across multiple GPUs when computing an activation
+matrix, the GPUs may need to wait for all forward computations to be
+completed before performing back propagation, and again before updating
+the model weights.</p>
 </section><section><h2 class="section-heading" id="deep-learning-libraries">Deep Learning Libraries<a class="anchor" aria-label="anchor" href="#deep-learning-libraries"></a></h2>
-<hr class="half-width"><p>The major libraries for working with deep learning models are Torch,
-TensorFlow and JAX. These are written in C++, but all have Python
+<hr class="half-width"><p>The current major libraries for working with deep learning models are
+Torch, TensorFlow and JAX. These are written in C++, but all have Python
 bindings that integrate efficiently with the standard Python scientific
 libraries, particularly NumPy and PIL.</p>
+<p>The core of all three of these libraries is essentially a tensor
+object which looks like a homogenous array of values, but which also
+efficiently performs automatic differentiation as part of computations
+performed on these objects. Layered on top of the core of each of these
+are APIs for loading data, models, optimizers, schedulers and so on that
+are actually needed to perform deep learning inference and training.</p>
 <p>In 2023 roughly 60% of AI research papers and over 90% of published
 models on HuggingFace use PyTorch. However most of the popular models
 were available for both TensorFlow and PyTorch. JAX is comparatively
 new, so doesn’t yet have the mind-share of other libraries, but is
 backed by Google.</p>
-<p>Keras is available as an API which unifies all three libraries,
-allowing the use of fairly similar code for building and training
-standard neural network architectures. Since it focuses on the networks
-and standardizes the training, it is a little harder to run across
-multiple GPUs or servers.</p>
-<p>We’ll primarily use PyTorch directly in this session, since it is the
-most popular framework, and also because the tools for multi-gpu
-deployment are somewhat nicer.</p>
-</section><section><h2 class="section-heading" id="multi-gpu-pytorch">Multi-GPU PyTorch<a class="anchor" aria-label="anchor" href="#multi-gpu-pytorch"></a></h2>
-<hr class="half-width"><p>PyTorch has a number of different APIs for distributing computation
+<p>Keras is a Python API which unifies all three libraries, allowing the
+use of fairly similar code for building and training standard neural
+network architectures. Since it focuses on the networks and standardizes
+the training, it is a little harder to run across multiple GPUs or
+servers, but Keras can be a good library to use when first gaining an
+understanding of deep neural networks.</p>
+<p>We’ll primarily use Torch in this session, since it is the most
+popular framework, and also because the tools for multi-gpu deployment
+are somewhat nicer.</p>
+</section><section><h2 class="section-heading" id="multi-gpu-torch">Multi-GPU Torch<a class="anchor" aria-label="anchor" href="#multi-gpu-torch"></a></h2>
+<hr class="half-width"><p>Torch has a number of different APIs for distributing computation
 across multiple GPUs, or handling situations where the model itself is
 too large to fit within a single GPU.</p>
 <ul><li>
@@ -473,10 +487,10 @@ FSDP2 is capable of.</li>
 <li>there are several other APIs, such as DeviceMesh, Monarch and
 TorchTitan.</li>
 </ul><p>These APIs are complex, and it is easy to miss subtle requirements
-for synchronisation, and not easy to convert from one API to another.
-Code written for DDP, for example, will need re-work to run using FSDP2.
-That makes the development process going from simple working CPU or
-single-GPU code to fully distributed code fragile.</p>
+for synchronisation, and it is not easy to convert from one API to
+another. Code written for DDP, for example, will need re-work to run
+using FSDP2. That makes for a fragile development process going from
+code working on a CPU or single-GPU to fully distributed.</p>
 <p>HuggingFace has a library, Accelerate, which simplifies the process
 of switching between the different APIs, by providing a unified API that
 can be configured to work with whatever hardware you are running on. The
@@ -486,7 +500,6 @@ declared resources appropriately. For research software, as opposed to
 commercial production pipelines, Accelerate provides a practical
 solution to most of the difficulties of distributing GPU
 computation.</p>
-<p>Hugging-face</p>
 </section><section><h2 class="section-heading" id="checkpoints">Checkpoints<a class="anchor" aria-label="anchor" href="#checkpoints"></a></h2>
 <hr class="half-width"><p>When training models, particularly when you expect the training to
 take a long time, you want to be able to inspect progress and
