@@ -2,53 +2,48 @@
 title: Setup
 ---
 
-FIXME: Setup instructions live in this document. Please specify the tools and
-the data sets the Learner needs to have installed.
+::: prereq
 
-## Data Sets
+- Shell with Git version control tool installed and the ability to navigate filesystem and run commands from within a shell
+- Python version 3.13 or above installed
+- An Iridis account
+- An understanding of Python syntax to be able to read code examples
 
-<!--
-FIXME: place any data you want learners to use in `episodes/data` and then use
-       a relative link ( [data zip file](data/lesson-data.zip) ) to provide a
-       link to it, replacing the example.com link.
--->
-Download the [data zip file](https://example.com/FIXME) and unzip it to your Desktop
+:::
 
 ## Software Setup
 
-::::::::::::::::::::::::::::::::::::::: discussion
+### Bash and Git
 
-### Details
+On macOS and Linux, some version of a shell (e.g. `bash`) with Git will be available by default and no installation is needed.
 
-Setup for different systems can be presented in dropdown menus via a `spoiler`
-tag. They will join to this discussion block, so you can give a general overview
-of the software used in this lesson here and fill out the individual operating
-systems (and potentially add more, e.g. online setup) in the solutions blocks.
+If you do not have a bash shell installed on your system and require assistance with the installation, you can take a look at [the instructions provided by Software Carpentry](https://swcarpentry.github.io/python-novice-inflammation/#install-python)
+for installing [shell](https://carpentries.github.io/workshop-template/install_instructions/#the-bash-shell) and [Git](https://carpentries.github.io/workshop-template/install_instructions/#git-1).
 
-:::::::::::::::::::::::::::::::::::::::::::::::::::
+### Python
 
-:::::::::::::::: spoiler
+Python version 3.13 or above is required. Type `python -V` (or `python3 -V` on Mac) at your shell prompt and press enter to see what version of Python is installed on your system.
+If you do not have Python installed on your system and require assistance with the installation, you can take a look at [the instructions provided by Software Carpentry](https://swcarpentry.github.io/python-novice-inflammation/#install-python)
+for installing Python in preparation for undertaking their Python lesson.
 
-### Windows
+### Access to Iridis
 
-Use PuTTY
+You will need access to Iridis for this session.
 
-::::::::::::::::::::::::
+If you do not have access to Iridis, the process of getting access to the system is straightforward for University of Southampton Staff and Students. Use of the system is *free* at the point of use, and there is a [short application form](https://sotonac.sharepoint.com/teams/HPCCommunityWiki/SitePages/Connecting-to-Iridis.aspx) to be filled in.
 
-:::::::::::::::: spoiler
+You will also need to ensure that you have an SSH client installed on your system, and have set up your SSH keys for Iridis as described in the above wiki page.
 
-### MacOS
+### VPN Access if Remote
 
-Use Terminal.app
+If you are attending the session while not connected to the University of Southampton, you will need to be connected to the University of Southampton VPN.
 
-::::::::::::::::::::::::
+### Example Code
 
+The course involves an [activity which can be found on GitHub](https://github.com/Southampton-RSG-Training/byte-sized-rse-python-hpc-example).
 
-:::::::::::::::: spoiler
+You can save time during the course by downloading this material beforehand on your local machine as well as in your account on the Iridis 6 login node:
 
-### Linux
-
-Use Terminal
-
-::::::::::::::::::::::::
-
+``` bash
+git clone https://github.com/Southampton-RSG-Training/byte-sized-rse-python-hpc-example.git
+```
