@@ -6,7 +6,7 @@ title: Setup
 
 - Shell with Git version control tool installed and the ability to navigate filesystem and run commands from within a shell
 - Python version 3.13 or above installed
-- An Iridis account
+- An Iridis account and SSH client
 - An understanding of Python syntax to be able to read code examples
 
 :::
@@ -32,7 +32,7 @@ You will need access to Iridis for this session.
 
 If you do not have access to Iridis, the process of getting access to the system is straightforward for University of Southampton Staff and Students. Use of the system is *free* at the point of use, and there is a [short application form](https://sotonac.sharepoint.com/teams/HPCCommunityWiki/SitePages/Connecting-to-Iridis.aspx) to be filled in.
 
-You will also need to ensure that you have an SSH client installed on your system, and have set up your SSH keys for Iridis as described in the above wiki page.
+You will also need to ensure that you have an SSH client installed on your system, and have [set up your SSH keys for Iridis as described in the above wiki page](https://sotonac.sharepoint.com/teams/HPCCommunityWiki/SitePages/Connecting-to-Iridis.aspx#setting-up-an-ssh-connection).
 
 ### VPN Access if Remote
 

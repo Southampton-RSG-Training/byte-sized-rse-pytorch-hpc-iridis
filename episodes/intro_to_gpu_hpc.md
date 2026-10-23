@@ -13,6 +13,7 @@ exercises: 0 # exercise time in minutes
 
 ::: objectives
 
+- Be aware of the options for
 - Understand how to configure SLURM batch files to make use of available GPUs on a system.
 - Be able to run a deep learning model on multiple GPUs using Accelerate and SLURM.
 
@@ -75,7 +76,7 @@ Keras is a Python API which unifies all three libraries, allowing the use of fai
 
 We'll primarily use Torch in this session, since it is the most popular framework, and also because the tools for multi-gpu deployment are somewhat nicer.
 
-## Multi-GPU Torch
+### Multi-GPU Torch
 
 Torch has a number of different APIs for distributing computation across multiple GPUs, or handling situations where the model itself is too large to fit within a single GPU.
 
@@ -88,7 +89,15 @@ These APIs are complex, and it is easy to miss subtle requirements for synchroni
 
 HuggingFace has a library, Accelerate, which simplifies the process of switching between the different APIs, by providing a unified API that can be configured to work with whatever hardware you are running on. The approach that Accelerate takes, is to wrap non-distributed PyTorch API objects, which then ensures that data and models get spread around the declared resources appropriately. For research software, as opposed to commercial production pipelines, Accelerate provides a practical solution to most of the difficulties of distributing GPU computation.
 
-## Checkpoints
+### Multi-GPU Metrics
+
+When computing metrics with distributed data, you generally can't simply compute the metric on each sub-data set, you usually need to accumulate to the main program thread before accumulating the result. For example, if you try to compute the standard deviation of the data, you need to subtract the mean over all the nodes or you will get incorrect results. Often you don't need to move entire data sets back and forth between workers, but instead can compute some intermediate statistics which allow you to compute the desired statistic more simply.
+
+HuggingFace also provides a library called Evaluate, which understands Accelerate and distributed computation of metrics. There are many different metrics available via Evaluate, and you can write your own if needed.
+
+Evaluate downloads some metrics at the point-of-need. Since HPC nodes typically do not have direct access to the internet, any metrics you want to download need to be pre-installed using the login node.
+
+### Checkpointing
 
 When training models, particularly when you expect the training to take a long time, you want to be able to inspect progress and performance of the models. Additionally, if your code runs into difficulties, or ends up running long, you do not want to lose progress you have made up to this point.
 
@@ -98,7 +107,9 @@ But better is to periodically save the state of your model, so that you can resu
 
 This is known as check-pointing.
 
-Distributed computation makes check-pointing somewhat more complex, but again, Accelerate has methods that let you checkpoint distributed training easily.
+Distributed computation makes check-pointing somewhat more complex because weights and state have to be synchronized to be saved, but again, Accelerate has methods that let you checkpoint distributed training easily.
+
+A checkpoint has to save more than just the current weights of the model to be complete. You also need to store the state of any schedulers and other state that varies over as the model is trained. Because Accelerate has access to the wrapped distributed objects, it knows which objects need to be
 
 ## Iridis X and Iridis 7
 
