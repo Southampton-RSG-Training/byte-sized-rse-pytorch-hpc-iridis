@@ -63,10 +63,13 @@ class SimpleCNN(Module):
 We can train this model for one epoch with a function like this:
 
 ``` python
+
 def train_epoch(
     model,
     train_loader,
     optimizer,
+    epoch,
+    log_interval=10,
 ):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -75,6 +78,17 @@ def train_epoch(
         loss = nll_loss(output, target)
         loss.backward()
         optimizer.step()
+        if batch_idx % log_interval == 0:
+            # report progress
+            logger.info(
+                "Train Epoch: {} [{}/{} ({:.0%})]\tLoss: {:.6f}".format(
+                    epoch,
+                    batch_idx * len(data),
+                    len(train_loader.dataset),
+                    batch_idx / len(train_loader),
+                    loss.item(),
+                )
+            )
 ```
 
 And then that can be put into a loop that trains epoch-by-epoch:
@@ -84,13 +98,30 @@ def train(
     model,
     optimizer,
     train_loader,
+    validation_loader,
     epochs,
+    checkpoint_dir,
+    start=1,
     gamma=0.7,
+    log_interval=10,
 ):
     scheduler = StepLR(optimizer, step_size=1, gamma=gamma)
-    for epoch in range(epochs):
-        train_epoch(model, train_loader, optimizer)
+
+    if start is None:
+        # try to resume if there are any checkpoints
+        checkpoints = sorted(checkpoint_dir.glob("SimpleCNN_*"))
+        if checkpoints:
+            start = load(model, optimizer, scheduler, checkpoints[-1]) + 1
+        else:
+            start = 1
+
+    for epoch in range(start, start + epochs):
+        train_epoch(
+            model, train_loader, optimizer, epoch, log_interval
+        )
+        test(model, validation_loader)
         scheduler.step()
+        save(model, optimizer, scheduler, epoch, checkpoint_dir)
 ```
 
 Inference can then be done with a function like this:
@@ -111,6 +142,7 @@ def test(model, test_loader):
     with no_grad():
         for data, target in test_loader:
             output = predict(model, data)
+            # target = target.to(device)
             test_loss += nll_loss(
                 output, target, reduction="sum"
             ).item()  # sum up batch loss
@@ -120,7 +152,16 @@ def test(model, test_loader):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
-    return test_loss, correct
+
+    logger.info(
+        "Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0%})\n".format(
+            test_loss,
+            correct,
+            len(test_loader.dataset),
+            correct / len(test_loader.dataset),
+        )
+    )
+    return test_loss
 ```
 
 Best practices would encourage adding things like:
@@ -132,8 +173,11 @@ Best practices would encourage adding things like:
 
 Adding all that in gives code which looks like this:
 
+::: spoiler
+
+### Code
+
 ``` python
-from math import inf
 import logging
 
 import torch
@@ -141,7 +185,6 @@ from torch import flatten, no_grad
 from torch.nn import Module, Conv2d, Dropout, Linear
 from torch.nn.functional import relu, max_pool2d, log_softmax, nll_loss
 from torch.optim.lr_scheduler import StepLR
-from torch.utils.data import Dataset, random_split
 
 logger = logging.getLogger(__name__)
 
@@ -247,14 +290,9 @@ def train(
     epochs,
     checkpoint_dir,
     start=1,
-    patience=None,
     gamma=0.7,
     log_interval=10,
 ):
-    best_val_loss = inf
-    if patience is None:
-        patience = epochs
-    wait = 0
     scheduler = StepLR(optimizer, step_size=1, gamma=gamma)
 
     if start is None:
@@ -269,17 +307,9 @@ def train(
         train_epoch(
             model, train_loader, optimizer, epoch, log_interval
         )
-        val_loss = test(model, validation_loader)
+        test(model, validation_loader)
         scheduler.step()
-        if val_loss < best_val_loss:
-            # checkpoint if model is better than previous best
-            save(model, optimizer, scheduler, epoch, checkpoint_dir)
-            wait = 0
-        else:
-            wait += 1
-            if wait > patience:
-                logger.info(f"Training stabilised at epoch {epoch}.")
-                break
+        save(model, optimizer, scheduler, epoch, checkpoint_dir)
 
 
 def save(model, optimizer, scheduler, epoch, path):
@@ -305,8 +335,13 @@ def load(model, optimizer, scheduler, path):
     epoch = int(path.name.split("_")[-1])
     return epoch
 ```
+:::
 
 And a little `click`-based command-line utility to run everything, including a preprocess command that downloads the data set if it isn't already available.
+
+::: spoiler
+
+### Code
 
 ``` python
 import logging
@@ -415,10 +450,11 @@ def train(
         logger = logging.getLogger(__name__)
         logger.exception("Exception during training:")
 ```
+:::
 
 This runs training on the CPU only.  Our end goal is to run the training code on Iridis X using the available GPUs with CUDA. To do this, in addition to the set-up to run things using SLURM, we need to adapt the code to be able to run on CUDA GPUs.
 
-Developing code using Iridis is awkward: you can't use a graphical IDE, the test cycle is slow, and the login nodes are often busy. So we want to do as much work as we can locally on your personal machine.
+Developing code using Iridis is awkward: you can't easily use a graphical IDE, the test cycle is slow, and the login nodes are often busy. So we want to do as much work as we can locally on your personal machine.
 
 ::: challenge
 
@@ -467,6 +503,8 @@ INFO:simple_cnn.model:Test set: Average loss: 0.0464, Accuracy: 11839/11999 (99%
 :::
 
 :::
+
+We'll walk through making all of this work on a multi-GPU system on Iridis X using Accelerate and Evaluate. The complete worked example is available as `simple-cnn-multiple` if you want to try running things, rather than converting the code yourself.
 
 ## Generalizing code using Accelerate
 
@@ -525,6 +563,69 @@ Add, commit and push the changes to your copy of the github repo.
 The updated training code should look like:
 
 ``` python
+def train_epoch(
+    model,
+    accelerator,
+    train_loader,
+    optimizer,
+    epoch,
+    log_interval=10,
+    dry_run=False,
+):
+    model.train()
+    for batch_idx, (data, target) in enumerate(train_loader):
+        optimizer.zero_grad()
+        output = model(data)
+        loss = nll_loss(output, target)
+        accelerator.backward(loss)
+        optimizer.step()
+        if batch_idx % log_interval == 0:
+            logger.info(
+                "Train Epoch: {} [{}/{} ({:.0%})]\tLoss: {:.6f}".format(
+                    epoch,
+                    batch_idx * len(data),
+                    len(train_loader) * len(data),
+                    batch_idx / len(train_loader),
+                    loss.item(),
+                ),
+            )
+            if dry_run:
+                break
+
+def train(
+    model,
+    optimizer,
+    train_loader,
+    validation_loader,
+    epochs,
+    checkpoint_dir,
+    start=1,
+    gamma=0.7,
+    log_interval=10,
+    dry_run=False,
+):
+    scheduler = StepLR(optimizer, step_size=1, gamma=gamma)
+
+    accelerator = Accelerator()
+
+    model, optimizer, train_loader, validation_loader, scheduler = accelerator.prepare(
+        model, optimizer, train_loader, validation_loader, scheduler
+    )
+
+    if start is None:
+        # try to resume if there are any checkpoints
+        checkpoints = sorted(checkpoint_dir.glob("SimpleCNN_*"))
+        if checkpoints:
+            start = load(accelerator, checkpoints[-1]) + 1
+        else:
+            start = 1
+
+    for epoch in range(start, start + epochs):
+        train_epoch(
+            model, accelerator, train_loader, optimizer, epoch, log_interval, dry_run
+        )
+        scheduler.step()
+
 ```
 
 And run with:
@@ -533,6 +634,81 @@ And run with:
 accelerate launch -m simple_cnn train --epochs 2
 ```
 
+:::
+
+:::
+
+### Computing Validation Metrics
+
+When running training code, you often want to get some idea of the progress of the training using validation data and various different metrics, depending on the problem space. Particularly when working with distributed data, this presents a problem of needing to gather results for the metric from multiple different processes and combine them. If you did not do this, you'd get a different value for the metric for each of worker processes relating only to the data that that process knows about.
+
+Accelerate and the associated Evaluate package also can help with this, by collecting the required data for each metric you are interested in on each data node, and then sending it to the main process to compute the actual value.
+
+To compute a distributed metric, you need to first load the metric:
+
+``` python
+metric = evaluate.load("accuracy")
+```
+
+You can then compute the predictions as usual, but instead of accumulating as you might normally, you call `accelerator.gather_for_metrics` to bring the appropriate information to the main worker, and then use the metric's `add_batch` function:
+
+``` python
+with no_grad():
+    for data, target in test_loader:
+        output = predict(model, data)
+        predictions = output.argmax(dim=-1)
+        all_predictions, all_targets = accelerator.gather_for_metrics(
+            (predictions, target)
+        )
+        metric.add_batch(
+            predictions=all_predictions,
+            references=all_targets,
+        )
+```
+
+Finally, after all the batches have been computed, you can compute the actual value of the metric over the dataset:
+
+``` python
+accuracy = metric.compute()['accuracy']
+```
+
+::: challenge
+
+Replace the `test` function with one that computes the accuracy correctly using evaluate.
+
+You will need to change the way that `test` is called to pass the accelerator:
+
+``` python
+def test(model, accelerator, test_loader):
+```
+
+and then use code as described above to perform the calculation.
+
+::: solution
+
+After re-writing, the test function should look something like this:
+
+``` python
+def test(model, accelerator, test_loader):
+    metric = evaluate.load("accuracy")
+    with no_grad():
+        for data, target in test_loader:
+            output = predict(model, data)
+            predictions = output.argmax(dim=-1)
+            all_predictions, all_targets = accelerator.gather_for_metrics(
+                (predictions, target)
+            )
+            metric.add_batch(
+                predictions=all_predictions,
+                references=all_targets,
+            )
+
+        accuracy = metric.compute()['accuracy']
+        logger.info(
+            "Test set: Accuracy: {}\n".format(accuracy)
+        )
+    return accuracy
+```
 :::
 
 :::
@@ -613,6 +789,8 @@ Add, commit and push the changes to your copy of the github repo.
 The updated training code should look like:
 
 ``` python
+# checkpoint
+save(accelerator, epoch, checkpoint_dir)
 ```
 
 And run with:
@@ -625,97 +803,6 @@ accelerate launch -m simple_cnn train --epochs 2
 
 :::
 
-### Computing Validation Metrics
-
-When running training code, you often want to get some idea of the progress of the training using validation data and various different metrics, depending on the problem space. Particularly when working with distributed data, this presents a problem of needing to gather results for the metric from multiple different processes and combine them. If you did not do this, you'd get a different value for the metric for each of worker processes relating only to the data that that process knows about.
-
-Accelerate and the associated Evaluate package also can help with this, by collecting the required data for each metric you are interested in on each data node, and then sending it to the main process to compute the actual value.
-
-### Convert Logging to use Accelerate
-
-As written, the code currently uses Python's standard logging system to save logs. Logging best practice in Python is to import `logging` in every module where you wish to do logging, and then call `logging.getLogger(__name__)` to set up the module's logger object:
-
-``` python
-import logging
-
-logger = logging.getLogger(__name__)
-```
-
-Then `logger` is available as a module-level global to perform any logging activities. For example, we can log the state of training in every nth batch as follows:
-
-``` python
-def train_epoch(
-    model,
-    train_loader,
-    optimizer,
-    epoch,
-    log_interval=10,
-):
-    model.train()
-    for batch_idx, (data, target) in enumerate(train_loader):
-        optimizer.zero_grad()
-        output = model(data)
-        loss = nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
-        if batch_idx % log_interval == 0:
-            # report progress
-            logger.info(
-                "Train Epoch: {} [{}/{} ({:.0%})]\tLoss: {:.6f}".format(
-                    epoch,
-                    batch_idx * len(data),
-                    len(train_loader),
-                    batch_idx / len(train_loader),
-                    loss.item(),
-                    main_process_only=False,
-                ),
-                main_process_only=False,
-            )
-```
-
-The other task that needs to be done at the start of each process is to configure logging. This is done in the example in the CLI:
-
-``` python
-import logging
-
-@click.group()
-@click.option(
-    "--log-dir",
-    "log_dir_name",
-    type=click.Path(file_okay=False, writable=True),
-    default="",
-)
-def cli(log_dir_name):
-    logging.basicConfig(level=logging.INFO)
-```
-
-This either logs to standard output, or to a specified directory (using the process id in the log file name).
-
-This doesn't work as well when running multiple tasks, and particularly on multiple nodes, as each Python process gets its own standard output and file, so it can be hard to tell what things happen when on different processes and nodes, and there is no guarantee that the log messages will be written in the order that things actually occurred across the different processes.
-
-Accelerate helps with this by providing an almost drop-in replacement for the `logging` module that sends all logging back to a single node. To use it, you replace `import logging` with `from accelerate import logging` and `getLogger` with `get_logger`. By default, this only logs from the main process, but you can specify an argument that will collect logs from all processes, and another that will ensure that
-
-Everything else remains unchanged:
-
-``` python
-from accelerate import logging
-
-logger = logging.get_logger(__name__)
-```
-
-::: challenge
-
-### Update Logging for Accelerate
-
-Update the logging code using Accelerate as described above, and then verify that the code runs correctly using the tests.
-
-``` bash
-python -m unittest discover --s src -v
-```
-
-Add, commit and push the changes to your copy of the github repo.
-
-:::
 
 ::: spoiler
 
@@ -804,31 +891,6 @@ The key features are:
   accelerate launch --num_processes 1 ...
   ```
 
-::: challenge
-
-### Run with Multiple GPUs on One Node
-
-Update the SLURM script to run on 2 GPUs (but still only 1 node).
-
-Add, commit and push the changes to your copy of the github repo.
-
-::: solution
-
-You should update the number of GPUs and CPUs per task to 2:
-
-``` bash
-#SBATCH --gpus-per-task=2                 # Every task to use two GPUs
-#SBATCH --cpus-per-task=2                 # Accelerate spawns a worker per GPU
-```
-
-You should als run accelerate with 2 processes:
-
-``` bash
-accelerate launch --num_processes 2 ...
-```
-:::
-
-:::
 
 
 ### Running on Iridis X
@@ -849,13 +911,43 @@ module load python
 ./install.sh
 ```
 
-To quickly test that everything is working on Iridis you can run the tests on the login node:
+At this point, with a properly configured SLURM batch file, you should be able to submit in the same way as any other job using `sbatch`.
 
 ``` bash
+sbatch single_node_a100.sh
+```
 
+::: challenge
+
+### Run with Multiple GPUs on One Node
+
+Update the SLURM script to run on 2 GPUs (but still only 1 node).
+
+Add, commit and push the changes to your copy of the github repo.
+
+::: solution
+
+You should update the number of GPUs and CPUs per task to 2:
+
+``` bash
+#SBATCH --gpus-per-task=2                 # Every task to use two GPUs
+#SBATCH --cpus-per-task=2                 # Accelerate spawns a worker per GPU
+```
+
+You should also run accelerate with 2 processes:
+
+``` bash
+accelerate launch --num_processes 2 ...
 ```
 
 At this point, with a properly configured SLURM batch file, you should be able to submit in the same way as any other job using `sbatch`.
+
+``` bash
+sbatch multi_node_a100.sh
+```
+:::
+
+:::
 
 ## References
 
