@@ -222,8 +222,6 @@
 <li><a href="#programming-with-gpus">Programming with GPUs</a></li>
 <li><a href="#multi-gpu-code">Multi-GPU code</a></li>
 <li><a href="#deep-learning-libraries">Deep Learning Libraries</a></li>
-<li><a href="#multi-gpu-torch">Multi-GPU Torch</a></li>
-<li><a href="#checkpoints">Checkpoints</a></li>
 <li><a href="#iridis-x-and-iridis-7">Iridis X and Iridis 7</a></li>
 <li><a href="#references">References</a></li>
         </ul></div><!--/div.accordion-body-->
@@ -313,7 +311,7 @@
       </div>
     </nav><main id="main-content" class="main-content"><div class="container lesson-content">
         <h1>Introduction to using GPUs on HPC Clusters</h1>
-        <p>Last updated on 2026-10-19 |
+        <p>Last updated on 2026-10-23 |
 
         <a href="https://github.com/carpentries/workbench-template-md/edit/main/episodes/intro_to_gpu_hpc.md" class="external-link">Edit this page <i aria-hidden="true" data-feather="edit"></i></a></p>
 
@@ -343,7 +341,8 @@
 <div class="card-body">
 <div class="inner bordered">
 <h3 class="card-title">Objectives</h3>
-<ul><li>Understand how to configure SLURM batch files to make use of
+<ul><li>Be aware of the options for</li>
+<li>Understand how to configure SLURM batch files to make use of
 available GPUs on a system.</li>
 <li>Be able to run a deep learning model on multiple GPUs using
 Accelerate and SLURM.</li>
@@ -472,8 +471,9 @@ understanding of deep neural networks.</p>
 <p>We’ll primarily use Torch in this session, since it is the most
 popular framework, and also because the tools for multi-gpu deployment
 are somewhat nicer.</p>
-</section><section><h2 class="section-heading" id="multi-gpu-torch">Multi-GPU Torch<a class="anchor" aria-label="anchor" href="#multi-gpu-torch"></a></h2>
-<hr class="half-width"><p>Torch has a number of different APIs for distributing computation
+<div class="section level3">
+<h3 id="multi-gpu-torch">Multi-GPU Torch<a class="anchor" aria-label="anchor" href="#multi-gpu-torch"></a></h3>
+<p>Torch has a number of different APIs for distributing computation
 across multiple GPUs, or handling situations where the model itself is
 too large to fit within a single GPU.</p>
 <ul><li>
@@ -502,8 +502,29 @@ declared resources appropriately. For research software, as opposed to
 commercial production pipelines, Accelerate provides a practical
 solution to most of the difficulties of distributing GPU
 computation.</p>
-</section><section><h2 class="section-heading" id="checkpoints">Checkpoints<a class="anchor" aria-label="anchor" href="#checkpoints"></a></h2>
-<hr class="half-width"><p>When training models, particularly when you expect the training to
+</div>
+<div class="section level3">
+<h3 id="multi-gpu-metrics">Multi-GPU Metrics<a class="anchor" aria-label="anchor" href="#multi-gpu-metrics"></a></h3>
+<p>When computing metrics with distributed data, you generally can’t
+simply compute the metric on each sub-data set, you usually need to
+accumulate to the main program thread before accumulating the result.
+For example, if you try to compute the standard deviation of the data,
+you need to subtract the mean over all the nodes or you will get
+incorrect results. Often you don’t need to move entire data sets back
+and forth between workers, but instead can compute some intermediate
+statistics which allow you to compute the desired statistic more
+simply.</p>
+<p>HuggingFace also provides a library called Evaluate, which
+understands Accelerate and distributed computation of metrics. There are
+many different metrics available via Evaluate, and you can write your
+own if needed.</p>
+<p>Evaluate downloads some metrics at the point-of-need. Since HPC nodes
+typically do not have direct access to the internet, any metrics you
+want to download need to be pre-installed using the login node.</p>
+</div>
+<div class="section level3">
+<h3 id="checkpointing">Checkpointing<a class="anchor" aria-label="anchor" href="#checkpointing"></a></h3>
+<p>When training models, particularly when you expect the training to
 take a long time, you want to be able to inspect progress and
 performance of the models. Additionally, if your code runs into
 difficulties, or ends up running long, you do not want to lose progress
@@ -517,9 +538,16 @@ the partially trained models to validate your approach, and potentially
 cancel the job early if you already have what you need, or if there is a
 difficulty with the way you are doing things.</p>
 <p>This is known as check-pointing.</p>
-<p>Distributed computation makes check-pointing somewhat more complex,
-but again, Accelerate has methods that let you checkpoint distributed
+<p>Distributed computation makes check-pointing somewhat more complex
+because weights and state have to be synchronized to be saved, but
+again, Accelerate has methods that let you checkpoint distributed
 training easily.</p>
+<p>A checkpoint has to save more than just the current weights of the
+model to be complete. You also need to store the state of any schedulers
+and other state that varies over as the model is trained. Because
+Accelerate has access to the wrapped distributed objects, it knows which
+objects need to be</p>
+</div>
 </section><section><h2 class="section-heading" id="iridis-x-and-iridis-7">Iridis X and Iridis 7<a class="anchor" aria-label="anchor" href="#iridis-x-and-iridis-7"></a></h2>
 <hr class="half-width"><p>At the University of Southampton there are two clusters which provide
 access to HPC GPU computation: Iridis X and the new Iridis 7.</p>
@@ -644,9 +672,9 @@ any links that you are not going to use.
   "creativeWorkStatus": "active",
   "url": "https://carpentries.github.io/workbench-template-md/instructor/intro_to_gpu_hpc.html",
   "identifier": "https://carpentries.github.io/workbench-template-md/instructor/intro_to_gpu_hpc.html",
-  "dateCreated": "2026-10-19",
-  "dateModified": "2026-10-19",
-  "datePublished": "2026-10-20"
+  "dateCreated": "2026-10-23",
+  "dateModified": "2026-10-23",
+  "datePublished": "2026-10-23"
 }
 
   </script><script>
