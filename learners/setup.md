@@ -37,13 +37,3 @@ You will also need to ensure that you have an SSH client installed on your syste
 ### VPN Access if Remote
 
 If you are attending the session while not connected to the University of Southampton, you will need to be connected to the University of Southampton VPN.
-
-### Example Code
-
-The course involves an [activity which can be found on GitHub](https://github.com/Southampton-RSG-Training/byte-sized-rse-python-hpc-example).
-
-You can save time during the course by downloading this material beforehand on your local machine as well as in your account on the Iridis 6 login node:
-
-``` bash
-git clone https://github.com/Southampton-RSG-Training/byte-sized-rse-python-hpc-example.git
-```

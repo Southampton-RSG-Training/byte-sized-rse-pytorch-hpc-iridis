@@ -13,7 +13,7 @@ exercises: 0 # exercise time in minutes
 
 ::: objectives
 
-- Be aware of the options for
+- Be aware of the options for GPU-based HPC.
 - Understand how to configure SLURM batch files to make use of available GPUs on a system.
 - Be able to run a deep learning model on multiple GPUs using Accelerate and SLURM.
 

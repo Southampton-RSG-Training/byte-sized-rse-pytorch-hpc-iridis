@@ -1,0 +1,33 @@
+/* You can put style overrides in this file... */
+
+.remark-slides-area .remark-slide-content::after {
+    content: "Made with Podium";
+    font-family: 'Droid Serif';
+    font-weight: normal;
+    font-size: 18pt;
+    position: absolute;
+    bottom: 12px;
+    right: 20px;
+    opacity: 0.5;
+}
+
+.remark-slides-area .remark-slide-content::before {
+    content: url('rsg_logo_small.png');
+    position: absolute;
+    top: 12px;
+    left: 20px;
+    width: 150px;
+    opacity: 0.5;
+}
+
+
+.title h3 {
+    font-size: 20pt;
+    margin: 0.2em;
+    font-weight: normal;
+}
+
+
+.hljs-default code {
+    font-size: 18pt;
+}
