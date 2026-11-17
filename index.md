@@ -2,8 +2,4 @@
 site: sandpaper::sandpaper_site
 ---
 
-This is a new lesson built with [The Carpentries Workbench][workbench]. 
-
-
-[workbench]: https://carpentries.github.io/sandpaper-docs
-
+This is a course that teaches the basics of GPU-based HPC on the Iridis cluster at the University of Southampton.
